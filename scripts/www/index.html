@@ -1,11 +1,517 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>戒烟助手</title>
+    
+    <!-- 
+      注意：为了方便您直接复制使用，这里依然使用了在线 CDN。
+      如果打包后在没网的地方打开发现样式丢失，请下载这两个文件放在项目里引用：
+      1. tailwind.js (下载地址: https://cdn.tailwindcss.com)
+      2. lucide.js (下载地址: https://unpkg.com/lucide@latest)
+    -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @keyframes heartbeat {
+            0%, 10%, 100% { transform: scale(1); }
+            5% { transform: scale(1.1); }
+            15% { transform: scale(1.2); }
+            50% { transform: scale(1); }
+        }
+        .animate-heartbeat { animation: heartbeat 2s ease-in-out infinite; }
+
+        @keyframes heartbeat-scroll {
+            0% { transform: translate(0, -50%); }
+            100% { transform: translate(-50%, -50%); }
+        }
+        .animate-heartbeat-scroll { animation: heartbeat-scroll 3s linear infinite; }
+
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .pt-safe { padding-top: env(safe-area-inset-top, 20px); }
+        * { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen selection:bg-red-100 flex flex-col">
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-white z-50 flex items-center justify-center transition-opacity duration-500">
+        <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500"></div>
+    </div>
+
+    <!-- Onboarding Screen -->
+    <div id="onboarding-screen" class="hidden min-h-screen bg-white p-6 flex-col items-center justify-center z-40 relative">
+        <div class="flex justify-center mb-8 animate-fade-in">
+            <div class="bg-red-50 p-6 rounded-[2rem]">
+                <i data-lucide="heart" class="w-12 h-12 text-red-500 fill-current"></i>
+            </div>
+        </div>
+        <h1 class="text-3xl font-bold text-gray-900 text-center mb-3 tracking-tight">开启无烟生活</h1>
+        <p class="text-gray-500 text-center mb-10 text-lg leading-relaxed">设置您的目标，我们将陪伴您<br>度过每一分每一秒。</p>
+        
+        <form id="onboarding-form" class="space-y-6 w-full max-w-sm animate-fade-in">
+            <div class="space-y-2">
+                <label class="block text-sm font-semibold text-gray-600 ml-1">开始戒烟时间</label>
+                <div class="bg-gray-50 p-2 rounded-2xl border border-gray-100 focus-within:ring-2 focus-within:ring-red-500 transition-all">
+                    <input type="datetime-local" id="setup-date" class="w-full p-2 bg-transparent focus:outline-none text-gray-800 font-medium" required>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-gray-600 ml-1">每日烟量</label>
+                    <div class="bg-gray-50 p-2 rounded-2xl border border-gray-100 focus-within:ring-2 focus-within:ring-red-500 transition-all">
+                        <input type="number" id="setup-amount" value="20" class="w-full p-2 bg-transparent focus:outline-none text-gray-800 font-medium" required>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-gray-600 ml-1">烟价 (元)</label>
+                    <div class="bg-gray-50 p-2 rounded-2xl border border-gray-100 focus-within:ring-2 focus-within:ring-red-500 transition-all">
+                        <input type="number" id="setup-price" value="25" class="w-full p-2 bg-transparent focus:outline-none text-gray-800 font-medium" required>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="w-full mt-6 bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600 px-6 py-3.5 rounded-2xl font-bold text-[17px] transition-all active:scale-[0.98]">
+                开始旅程
+            </button>
+        </form>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="main-app" class="hidden flex-1 flex flex-col pb-24">
+        <!-- Header -->
+        <div class="fixed top-0 left-0 right-0 z-30 px-6 py-4 bg-white/80 backdrop-blur-md border-b border-gray-100/50 flex justify-between items-center pt-safe">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-red-500 rounded-xl flex items-center justify-center text-white shadow-red-200 shadow-md">
+                    <i data-lucide="cigarette-off" class="w-5 h-5"></i>
+                </div>
+                <h1 class="text-lg font-bold text-gray-900 tracking-tight">戒烟助手</h1>
+            </div>
+            <button id="btn-settings" class="p-2 rounded-full text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Content Views -->
+        <main class="flex-1 pt-20 px-4 mt-safe overflow-y-auto no-scrollbar">
+            
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="space-y-6 animate-fade-in">
+                <!-- Timer Card -->
+                <div class="rounded-[2.5rem] p-8 text-white shadow-2xl shadow-red-500/30 relative overflow-hidden flex flex-col items-center justify-center text-center h-[340px] bg-gradient-to-br from-red-500/85 to-red-600/85 backdrop-blur-sm">
+                    <!-- Background Animation -->
+                    <div class="absolute inset-0 pointer-events-none">
+                        <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:40px_40px] opacity-20"></div>
+                        <div class="absolute top-1/2 left-0 w-[200%] h-32 -translate-y-1/2 flex animate-heartbeat-scroll opacity-40">
+                            <svg viewBox="0 0 1200 200" preserveAspectRatio="none" class="w-1/2 h-full stroke-white fill-none stroke-2 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"><path vectorEffect="non-scaling-stroke" d="M0,100 L100,100 L120,100 L140,90 L160,110 L180,100 L200,100 L220,100 L240,60 L260,160 L280,40 L300,120 L320,100 L360,100 L380,80 L400,110 L420,100 L600,100" /></svg>
+                            <svg viewBox="0 0 1200 200" preserveAspectRatio="none" class="w-1/2 h-full stroke-white fill-none stroke-2 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"><path vectorEffect="non-scaling-stroke" d="M0,100 L100,100 L120,100 L140,90 L160,110 L180,100 L200,100 L220,100 L240,60 L260,160 L280,40 L300,120 L320,100 L360,100 L380,80 L400,110 L420,100 L600,100" /></svg>
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="relative w-64 h-64 animate-heartbeat opacity-50">
+                                <svg viewBox="0 0 24 24" class="w-full h-full absolute top-0 left-0 text-red-900" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
+                                <div id="heart-fill-container" class="absolute inset-0 transition-all duration-1000 ease-out" style="clip-path: inset(100% 0 0 0);">
+                                    <svg viewBox="0 0 24 24" class="w-full h-full text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Timer Text -->
+                    <div class="relative z-10 w-full flex flex-col items-center">
+                        <p class="text-red-100 font-medium mb-8 tracking-wider text-xs bg-white/20 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/20">生命重塑进行中</p>
+                        <div class="flex items-baseline justify-center gap-2 mb-10 drop-shadow-lg">
+                            <span id="timer-days" class="text-8xl font-bold tracking-tighter leading-none text-white">0</span>
+                            <span class="text-2xl font-medium opacity-90 mb-2">天</span>
+                        </div>
+                        <div class="bg-white/15 rounded-2xl px-6 py-4 backdrop-blur-md border border-white/20 w-full shadow-lg">
+                            <div class="flex justify-between items-center text-center divide-x divide-white/20">
+                                <div class="flex-1 px-2"><div id="timer-hours" class="text-2xl font-bold leading-none mb-1 text-white">00</div><div class="text-[11px] text-red-100 font-medium">小时</div></div>
+                                <div class="flex-1 px-2"><div id="timer-minutes" class="text-2xl font-bold leading-none mb-1 text-white">00</div><div class="text-[11px] text-red-100 font-medium">分钟</div></div>
+                                <div class="flex-1 px-2"><div id="timer-seconds" class="text-2xl font-bold leading-none mb-1 text-white">00</div><div class="text-[11px] text-red-100 font-medium">秒</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Checkin Card -->
+                <div id="checkin-card" class="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center transition-all duration-300">
+                    <!-- Dynamic JS -->
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white rounded-[2.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100/50 relative overflow-hidden h-48 flex flex-col justify-between group hover:shadow-lg transition-shadow duration-300">
+                        <div class="absolute -bottom-4 -right-4 text-orange-50 opacity-[0.15] group-hover:scale-110 transition-transform duration-500"><i data-lucide="wallet" class="w-24 h-24 fill-current"></i></div>
+                        <div class="flex items-center gap-2 relative z-10"><div class="bg-orange-100 p-2 rounded-2xl text-orange-500"><i data-lucide="wallet" class="w-4 h-4"></i></div><span class="text-xs font-bold text-gray-400 uppercase tracking-wider">节省金额</span></div>
+                        <div class="relative z-10">
+                            <div class="flex items-baseline gap-1"><span class="text-sm font-bold text-gray-400 mt-1">¥</span><span id="stat-money" class="text-4xl font-extrabold text-gray-900 tracking-tight leading-none">0</span></div>
+                            <div class="mt-3"><div class="inline-flex items-center gap-1.5 px-3 py-2 bg-orange-50 border border-orange-100 rounded-2xl"><i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-orange-500 stroke-[2.5px]"></i><span id="stat-metaphor" class="text-xs font-bold text-orange-600 leading-none truncate max-w-[100px]">计算中...</span></div></div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-[2.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100/50 relative overflow-hidden h-48 flex flex-col justify-between group hover:shadow-lg transition-shadow duration-300">
+                        <div class="absolute -bottom-4 -right-4 text-blue-50 opacity-[0.15] group-hover:scale-110 transition-transform duration-500"><i data-lucide="cigarette-off" class="w-24 h-24 fill-current"></i></div>
+                        <div class="flex items-center gap-2 relative z-10"><div class="bg-blue-100 p-2 rounded-2xl text-blue-500"><i data-lucide="cigarette" class="w-4 h-4"></i></div><span class="text-xs font-bold text-gray-400 uppercase tracking-wider">少抽烟</span></div>
+                        <div class="relative z-10">
+                            <div class="flex items-baseline gap-1"><span id="stat-cigs" class="text-4xl font-extrabold text-gray-900 tracking-tight leading-none">0</span><span class="text-sm font-bold text-gray-400">支</span></div>
+                            <div class="mt-3"><div class="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-100 rounded-2xl"><i data-lucide="heart" class="w-3.5 h-3.5 text-blue-500 stroke-[2.5px]"></i><span class="text-xs font-bold text-blue-600 leading-none">肺部正在修复</span></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health View -->
+            <div id="view-health" class="hidden space-y-6 animate-fade-in relative">
+                <div class="absolute left-[2.25rem] top-4 bottom-12 w-0.5 bg-gray-200/60 rounded-full -z-10"></div>
+                <div id="health-timeline" class="space-y-6"></div>
+            </div>
+
+            <!-- Checkin View -->
+            <div id="view-checkin" class="hidden space-y-6 animate-fade-in">
+                <div class="bg-gray-50/50 backdrop-blur-xl rounded-[2.5rem] shadow-sm border border-gray-100 p-6">
+                    <div class="flex justify-between items-center mb-6 px-2">
+                        <span id="calendar-month" class="font-bold text-2xl text-gray-900 tracking-tight"></span>
+                        <div class="bg-red-100 text-red-600 px-4 py-1.5 rounded-full text-xs font-bold shadow-sm shadow-red-100">累计 <span id="checkin-count">0</span> 天</div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-3 mb-4 px-1">
+                        <div class="text-center text-xs font-bold text-gray-300">日</div><div class="text-center text-xs font-bold text-gray-300">一</div><div class="text-center text-xs font-bold text-gray-300">二</div><div class="text-center text-xs font-bold text-gray-300">三</div><div class="text-center text-xs font-bold text-gray-300">四</div><div class="text-center text-xs font-bold text-gray-300">五</div><div class="text-center text-xs font-bold text-gray-300">六</div>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-3"></div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="view-settings" class="hidden space-y-6 animate-fade-in">
+                <div class="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                    <div class="p-4 border-b border-gray-50 flex items-center gap-3"><div class="bg-blue-100 p-1.5 rounded-lg text-blue-600"><i data-lucide="settings" class="w-4 h-4"></i></div><span class="font-semibold text-gray-900">基本参数</span></div>
+                    <div class="p-4 space-y-5">
+                        <div><label class="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1 mb-1.5 block">开始时间</label><input id="edit-date" type="datetime-local" class="w-full p-3 bg-gray-50 rounded-xl text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1 mb-1.5 block">每日烟量</label><input id="edit-amount" type="number" class="w-full p-3 bg-gray-50 rounded-xl text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20"></div>
+                            <div><label class="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1 mb-1.5 block">烟价 (元)</label><input id="edit-price" type="number" class="w-full p-3 bg-gray-50 rounded-xl text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20"></div>
+                        </div>
+                        <button id="btn-save-settings" class="w-full py-3.5 bg-red-500 text-white rounded-xl font-bold shadow-sm hover:bg-red-600 active:scale-95 transition-all">保存修改</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+                    <div class="p-4 border-b border-gray-50 flex items-center gap-3"><div class="bg-red-100 p-1.5 rounded-lg text-red-600"><i data-lucide="alert-triangle" class="w-4 h-4"></i></div><span class="font-semibold text-gray-900">重置选项</span></div>
+                    <div class="p-4 space-y-3">
+                        <button onclick="showConfirm('relapse')" class="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-red-50 rounded-xl group transition-colors text-left"><div><div class="font-semibold text-gray-900 group-hover:text-red-600">我不小心抽烟了</div><div class="text-xs text-gray-500 mt-0.5">重置计时器为现在，保留打卡</div></div><i data-lucide="history" class="w-5 h-5 text-gray-400 group-hover:text-red-500"></i></button>
+                        <button onclick="showConfirm('reset')" class="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-red-50 rounded-xl group transition-colors text-left"><div><div class="font-semibold text-gray-900 group-hover:text-red-600">完全重置应用</div><div class="text-xs text-gray-500 mt-0.5">清除所有数据和设置</div></div><i data-lucide="x-circle" class="w-5 h-5 text-gray-400 group-hover:text-red-500"></i></button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Nav -->
+        <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-t border-gray-200/50 px-6 pt-3 pb-safe flex justify-between items-center">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center gap-1 transition-all duration-300 w-16 text-red-500 scale-105"><i data-lucide="clock" class="w-6 h-6 stroke-[2.5px]"></i><span class="text-[10px] font-medium tracking-wide">计时</span></button>
+            <button onclick="switchTab('health')" id="nav-health" class="flex flex-col items-center gap-1 transition-all duration-300 w-16 text-gray-400 hover:text-gray-500"><i data-lucide="heart" class="w-6 h-6 stroke-[2.5px]"></i><span class="text-[10px] font-medium tracking-wide">健康</span></button>
+            <button onclick="switchTab('checkin')" id="nav-checkin" class="flex flex-col items-center gap-1 transition-all duration-300 w-16 text-gray-400 hover:text-gray-500"><i data-lucide="calendar" class="w-6 h-6 stroke-[2.5px]"></i><span class="text-[10px] font-medium tracking-wide">打卡</span></button>
+        </nav>
+    </div>
+
+    <!-- Modal -->
+    <div id="custom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/30 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white rounded-[2rem] w-full max-w-sm p-8 shadow-2xl transition-transform transform scale-100">
+            <div class="flex justify-center mb-4"><div id="modal-icon-container" class="p-4 rounded-full bg-red-100 text-red-500"><i id="modal-icon" data-lucide="alert-triangle" class="w-8 h-8"></i></div></div>
+            <h3 id="modal-title" class="text-xl font-bold text-gray-900 mb-3 text-center">标题</h3>
+            <p id="modal-desc" class="text-gray-500 mb-8 leading-relaxed text-center text-sm">内容</p>
+            <div class="flex flex-col gap-3">
+                <button id="modal-confirm-btn" class="w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-gray-200 transition-transform active:scale-95 bg-red-500">确定执行</button>
+                <button onclick="hideModal()" class="w-full py-4 rounded-xl bg-gray-100 text-gray-600 font-bold text-lg hover:bg-gray-200 transition-colors">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN LOGIC (Pure LocalStorage) -->
+    <script>
+        // State
+        let userSettings = null;
+        let userCheckins = { dates: [], emojis: {} };
+
+        // Expose functions for onclick events
+        window.switchTab = switchTab;
+        window.showConfirm = showConfirm;
+        window.hideModal = hideModal;
+        window.handleEmojiSelect = handleCheckIn;
+
+        function init() {
+            setTimeout(() => {
+                const s = localStorage.getItem('qs_settings');
+                const c = localStorage.getItem('qs_checkins');
+                if (c) userCheckins = JSON.parse(c);
+                if (s) {
+                    userSettings = JSON.parse(s);
+                    showMainApp();
+                    updateUI();
+                    updateCheckinUI(); // Fix: Call explicitly on start
+                } else {
+                    showOnboarding();
+                }
+                document.getElementById('loading-screen').classList.add('hidden');
+            }, 500);
+        }
+
+        // Logic
+        function saveSettings(data) {
+            localStorage.setItem('qs_settings', JSON.stringify(data));
+            userSettings = data;
+            updateUI();
+        }
+        function saveCheckin(data) {
+            localStorage.setItem('qs_checkins', JSON.stringify(data));
+            userCheckins = data;
+            updateCheckinUI();
+            updateUI();
+        }
+
+        // Views
+        function showOnboarding() {
+            document.getElementById('onboarding-screen').classList.remove('hidden');
+            document.getElementById('onboarding-screen').classList.add('flex');
+            document.getElementById('main-app').classList.add('hidden');
+            lucide.createIcons();
+        }
+        function showMainApp() {
+            document.getElementById('onboarding-screen').classList.add('hidden');
+            document.getElementById('onboarding-screen').classList.remove('flex');
+            document.getElementById('main-app').classList.remove('hidden');
+            lucide.createIcons();
+        }
+        function switchTab(id) {
+            ['dashboard','health','checkin'].forEach(t => {
+                const btn = document.getElementById(`nav-${t}`);
+                if(t===id) btn.className = "flex flex-col items-center gap-1 transition-all duration-300 w-16 text-red-500 scale-105";
+                else btn.className = "flex flex-col items-center gap-1 transition-all duration-300 w-16 text-gray-400 hover:text-gray-500";
+                
+                const view = document.getElementById(`view-${t}`);
+                if(view) view.classList.add('hidden');
+            });
+            document.getElementById('view-settings').classList.add('hidden');
+            document.getElementById(`view-${id}`).classList.remove('hidden');
+            window.scrollTo(0,0);
+            lucide.createIcons();
+        }
+
+        document.getElementById('btn-settings').addEventListener('click', () => {
+            ['dashboard','health','checkin'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                document.getElementById(`nav-${t}`).className = "flex flex-col items-center gap-1 transition-all duration-300 w-16 text-gray-400 hover:text-gray-500";
+            });
+            document.getElementById('view-settings').classList.remove('hidden');
+            if(userSettings) {
+                document.getElementById('edit-date').value = userSettings.quitDate.slice(0,16);
+                document.getElementById('edit-amount').value = userSettings.cigsPerDay;
+                document.getElementById('edit-price').value = userSettings.pricePerPack;
+            }
+        });
+
+        // Updates
+        function updateUI() {
+            if(!userSettings) return;
+            const start = new Date(userSettings.quitDate);
+            const now = new Date();
+            const diff = now - start;
+            
+            const days = Math.floor(diff / (1000*60*60*24));
+            const hours = Math.floor((diff / (1000*60*60)) % 24);
+            const minutes = Math.floor((diff / (1000*60)) % 60);
+            const seconds = Math.floor((diff / 1000) % 60);
+            
+            const totalHours = diff / (1000*60*60);
+            const cigs = Math.floor(totalHours * (userSettings.cigsPerDay / 24));
+            const money = (cigs * (userSettings.pricePerPack / 20)).toFixed(1);
+
+            document.getElementById('timer-days').innerText = days;
+            document.getElementById('timer-hours').innerText = String(hours).padStart(2,'0');
+            document.getElementById('timer-minutes').innerText = String(minutes).padStart(2,'0');
+            document.getElementById('timer-seconds').innerText = String(seconds).padStart(2,'0');
+
+            const fillP = Math.min(100, (days/100)*100);
+            const heartFill = document.getElementById('heart-fill-container');
+            if(heartFill) heartFill.style.clipPath = `inset(${100-fillP}% 0 0 0)`;
+
+            document.getElementById('stat-money').innerText = Number(money).toFixed(0);
+            document.getElementById('stat-cigs').innerText = cigs;
+
+            // Metaphor
+            const m = parseFloat(money);
+            let meta = "一支棒棒糖 🍭";
+            if(m>10000) meta="一次豪华旅游 ✈️";
+            else if(m>5000) meta="一台iPad Air 📱";
+            else if(m>2500) meta="一台Switch 🎮";
+            else if(m>1500) meta="一双AJ球鞋 👟";
+            else if(m>800) meta="一瓶神仙水 🧴";
+            else if(m>400) meta="一次火锅聚餐 🍲";
+            else if(m>200) meta="一包优质大米 🍚";
+            else if(m>100) meta="一顿快餐 🍔";
+            else if(m>50) meta="一杯奶茶 🧋";
+            else if(m>20) meta="一瓶可乐 🥤";
+            document.getElementById('stat-metaphor').innerText = `≈ ${meta}`;
+
+            // Checkin Button
+            const today = new Date().toISOString().split('T')[0];
+            const isChecked = userCheckins.dates.includes(today);
+            const card = document.getElementById('checkin-card');
+            if(card) {
+                if(isChecked) {
+                    const e = userCheckins.emojis[today] || "✅";
+                    card.innerHTML = `<div class="flex flex-col items-center animate-fade-in py-2"><div class="text-5xl mb-3 animate-bounce" style="animation-duration: 2s">${e}</div><p class="text-gray-900 font-bold text-lg">今日已打卡</p><p class="text-gray-500 text-sm">继续保持，您很棒！</p></div>`;
+                } else {
+                    card.innerHTML = `<div class="w-full"><div class="flex items-center gap-2 mb-4 justify-center text-gray-500 text-sm"><i data-lucide="calendar" class="w-4 h-4"></i> <span>记录今天的胜利</span></div><p class="text-gray-600 font-medium mb-4">今天感觉如何？</p><div class="flex justify-between gap-2"><button onclick="handleEmojiSelect('💪')" class="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-gray-50 active:scale-90 transition-transform"><span class="text-3xl">💪</span><span class="text-[10px] text-gray-400">充满力量</span></button><button onclick="handleEmojiSelect('😄')" class="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-gray-50 active:scale-90 transition-transform"><span class="text-3xl">😄</span><span class="text-[10px] text-gray-400">开心</span></button><button onclick="handleEmojiSelect('😌')" class="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-gray-50 active:scale-90 transition-transform"><span class="text-3xl">😌</span><span class="text-[10px] text-gray-400">平静</span></button><button onclick="handleEmojiSelect('😬')" class="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-gray-50 active:scale-90 transition-transform"><span class="text-3xl">😬</span><span class="text-[10px] text-gray-400">有点难</span></button><button onclick="handleEmojiSelect('😫')" class="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-gray-50 active:scale-90 transition-transform"><span class="text-3xl">😫</span><span class="text-[10px] text-gray-400">煎熬</span></button></div></div>`;
+                }
+            }
+            updateHealthTimeline(totalHours);
+        }
+
+        function updateCheckinUI() {
+            const today = new Date();
+            document.getElementById('calendar-month').innerHTML = `${today.getMonth()+1}月 <span class="text-gray-400 font-medium text-lg ml-1">${today.getFullYear()}</span>`;
+            document.getElementById('checkin-count').innerText = userCheckins.dates.length;
+            
+            const daysInM = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).getDay();
+            
+            let html = '';
+            for(let i=0; i<firstDay; i++) html += `<div></div>`;
+            for(let d=1; d<=daysInM; d++) {
+                const dateStr = new Date(today.getFullYear(), today.getMonth(), d+1).toISOString().split('T')[0];
+                const isC = userCheckins.dates.includes(dateStr);
+                const isT = d === today.getDate();
+                const em = userCheckins.emojis[dateStr];
+                
+                let cls = `aspect-square flex flex-col items-center justify-center rounded-2xl transition-all duration-300 relative group `;
+                let con = '';
+                if(isC) {
+                    cls += `bg-red-500 text-white shadow-lg shadow-red-200 scale-105 z-10`;
+                    con = em ? `<span class="text-2xl leading-none drop-shadow-sm">${em}</span>` : `<span class="text-sm font-bold opacity-0 absolute">${d}</span><i data-lucide="check-circle" class="w-5 h-5 stroke-[3px]"></i>`;
+                } else if(isT) {
+                    cls += `bg-white border-2 border-red-500 text-red-500 shadow-md z-10`;
+                    con = `<span class="text-sm font-bold">${d}</span>`;
+                } else {
+                    cls += `bg-white border border-gray-100 text-gray-600 shadow-sm`;
+                    con = `<span class="text-sm font-bold">${d}</span>`;
+                }
+                html += `<div class="${cls}">${con}</div>`;
+            }
+            document.getElementById('calendar-grid').innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function updateHealthTimeline(totalHours) {
+            const ms = [
+                { hours: 0.33, title: '20分钟', desc: '心率、血压恢复正常，血液循环初步改善', icon: 'heart' },
+                { hours: 12, title: '12小时', desc: '体内一氧化碳正常，血氧上升，心肺负担减轻', icon: 'refresh-cw' },
+                { hours: 48, title: '48小时', desc: '味觉嗅觉敏感度提升，尼古丁完全代谢', icon: 'smile' },
+                { hours: 72, title: '3天', desc: '支气管放松，呼吸逐渐顺畅', icon: 'clock' },
+                { hours: 24 * 14, title: '2周', desc: '循环与肺功能改善，皮肤好转，戒断症状减轻', icon: 'sparkles' },
+                { hours: 24 * 90, title: '3个月', desc: '肺纤毛再生，免疫功能提升，感染风险降低', icon: 'shield' },
+                { hours: 24 * 270, title: '9个月', desc: '肺活量增加，呼吸短促缓解', icon: 'activity' },
+                { hours: 24 * 365, title: '1年', desc: '冠心病风险降低50%，血管弹性恢复', icon: 'heart' },
+                { hours: 24 * 365 * 5, title: '5年', desc: '中风风险降至正常，多种癌症风险减半', icon: 'check-circle' },
+                { hours: 24 * 365 * 10, title: '10年', desc: '肺癌死亡率下降50%，总体患癌风险接近常人', icon: 'trophy' },
+            ];
+            let html = '';
+            ms.forEach((m, idx) => {
+                const isC = totalHours >= m.hours;
+                const p = Math.min(100, (totalHours/m.hours)*100);
+                const nc = isC ? 'border-red-500 shadow-md shadow-red-200 scale-110' : 'border-gray-200';
+                const ic = isC ? `<i data-lucide="check-circle" class="w-4 h-4 text-red-500 stroke-[3px]"></i>` : `<div class="w-2.5 h-2.5 bg-gray-300 rounded-full"></div>`;
+                const cc = isC ? 'bg-gradient-to-br from-red-500 to-red-600 border-transparent text-white shadow-xl shadow-red-500/20 scale-[1.02]' : 'bg-white border-gray-100 text-gray-600 shadow-sm';
+                const ib = isC ? 'bg-white/20 text-white backdrop-blur-sm' : 'bg-red-50 text-red-500';
+                const tt = isC ? 'text-white' : 'text-gray-900';
+                const td = isC ? 'text-red-50' : 'text-gray-500';
+                
+                let pb = '';
+                if(!isC && totalHours < m.hours && (idx===0 || totalHours > ms[idx-1].hours)) {
+                    pb = `<div class="mt-5 bg-gray-50 p-3 rounded-2xl border border-gray-100"><div class="flex justify-between text-xs text-gray-400 mb-1.5 font-bold uppercase tracking-wider"><span>进行中</span><span class="text-red-500">${Math.floor(p)}%</span></div><div class="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden"><div class="h-full bg-red-500 rounded-full transition-all duration-1000" style="width: ${p}%"></div></div></div>`;
+                }
+
+                html += `<div class="relative pl-14 group"><div class="absolute left-2 top-8 w-10 h-10 rounded-full border-[3px] z-10 flex items-center justify-center transition-all duration-500 bg-white ${nc}">${ic}</div><div class="p-6 rounded-[2rem] border transition-all duration-500 relative overflow-hidden ${cc}">${isC ? `<div class="absolute -top-6 -right-6 opacity-10 rotate-12"><i data-lucide="${m.icon}" class="w-32 h-32 fill-current"></i></div>` : ''}<div class="flex justify-between items-center mb-2 relative z-10"><div class="flex items-center gap-3"><div class="p-2.5 rounded-2xl ${ib}"><i data-lucide="${m.icon}" class="w-5 h-5 ${isC?'fill-current':''}"></i></div><h3 class="font-bold text-lg ${tt}">${m.title}</h3></div></div><p class="text-sm leading-relaxed relative z-10 font-medium ${td}">${m.desc}</p>${pb}</div></div>`;
+            });
+            document.getElementById('health-timeline').innerHTML = html;
+            lucide.createIcons();
+        }
+
+        // Actions
+        document.getElementById('onboarding-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const date = document.getElementById('setup-date').value;
+            const amount = parseInt(document.getElementById('setup-amount').value);
+            const price = parseFloat(document.getElementById('setup-price').value);
+            saveSettings({ quitDate: new Date(date).toISOString(), cigsPerDay: amount, pricePerPack: price });
+            showMainApp();
+        });
+
+        document.getElementById('btn-save-settings').addEventListener('click', () => {
+            const date = document.getElementById('edit-date').value;
+            const amount = parseInt(document.getElementById('edit-amount').value);
+            const price = parseFloat(document.getElementById('edit-price').value);
+            saveSettings({ quitDate: new Date(date).toISOString(), cigsPerDay: amount, pricePerPack: price });
+            alert('设置已保存');
+            switchTab('dashboard');
+        });
+
+        function handleCheckIn(emoji) {
+            const today = new Date().toISOString().split('T')[0];
+            const updates = { ...userCheckins };
+            if(!updates.dates.includes(today)) updates.dates.push(today);
+            if(emoji) updates.emojis[today] = emoji;
+            saveCheckin(updates);
+        }
+
+        let confirmCallback = null;
+        function showConfirm(action) {
+            const modal = document.getElementById('custom-modal');
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-desc');
+            const btn = document.getElementById('modal-confirm-btn');
+            const iconContainer = document.getElementById('modal-icon-container');
+            
+            if (action === 'relapse') {
+                title.innerText = '确定重置计时器？';
+                desc.innerText = '您的戒烟开始时间将被设为现在。但别担心，我们会保留您之前的打卡记录。';
+                btn.className = "w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-gray-200 transition-transform active:scale-95 bg-orange-500";
+                iconContainer.className = "p-4 rounded-full bg-orange-100 text-orange-500";
+                confirmCallback = () => {
+                    saveSettings({ ...userSettings, quitDate: new Date().toISOString() });
+                    switchTab('dashboard');
+                };
+            } else {
+                title.innerText = '确定完全重置？';
+                desc.innerText = '此操作不可撤销。所有打卡记录、设置和数据都将被永久删除。';
+                btn.className = "w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg shadow-gray-200 transition-transform active:scale-95 bg-red-500";
+                iconContainer.className = "p-4 rounded-full bg-red-100 text-red-500";
+                confirmCallback = () => {
+                    localStorage.removeItem('qs_settings');
+                    localStorage.removeItem('qs_checkins');
+                    location.reload();
+                };
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function hideModal() {
+            document.getElementById('custom-modal').classList.add('hidden');
+            confirmCallback = null;
+        }
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            if(confirmCallback) confirmCallback();
+            hideModal();
+        });
+
+        init();
+        setInterval(updateUI, 1000);
+    </script>
+</body>
 </html>
